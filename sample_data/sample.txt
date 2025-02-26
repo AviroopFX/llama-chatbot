@@ -1,0 +1,20 @@
+This is a sample document to test the Llama chatbot.
+
+The Llama chatbot is a custom solution built to answer questions based on your own data. It uses the Llama language model to generate responses and can process various types of documents including PDFs, Word documents, text files, CSV files, Excel spreadsheets, and JSON files.
+
+Key features:
+1. Document processing: The chatbot can extract text from various file formats and store it in a database.
+2. Semantic search: When you ask a question, the chatbot searches for relevant information in the processed documents.
+3. Response generation: The chatbot uses Llama to generate a response based on the retrieved information.
+4. No external API required: Everything runs locally on your machine, ensuring privacy and data security.
+
+How to use the chatbot:
+1. Upload your documents through the web interface
+2. Ask questions related to the content of your documents
+3. The chatbot will search for relevant information and generate a response
+
+Example questions you can ask:
+- What is the Llama chatbot?
+- What file formats are supported?
+- How does the chatbot work?
+- Is my data secure when using this chatbot?

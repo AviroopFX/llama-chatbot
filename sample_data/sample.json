@@ -1,0 +1,92 @@
+[
+  {
+    "employee_id": 101,
+    "name": "John Smith",
+    "department": "Engineering",
+    "position": "Senior Developer",
+    "salary": 120000,
+    "skills": ["Python", "JavaScript", "Docker", "AWS"],
+    "projects": [
+      {
+        "name": "API Gateway",
+        "status": "Completed",
+        "duration_months": 6
+      },
+      {
+        "name": "Database Migration",
+        "status": "In Progress",
+        "duration_months": 3
+      }
+    ]
+  },
+  {
+    "employee_id": 102,
+    "name": "Emily Johnson",
+    "department": "Marketing",
+    "position": "Marketing Manager",
+    "salary": 95000,
+    "skills": ["SEO", "Content Strategy", "Social Media", "Analytics"],
+    "projects": [
+      {
+        "name": "Brand Redesign",
+        "status": "Completed",
+        "duration_months": 4
+      },
+      {
+        "name": "Q4 Campaign",
+        "status": "Planning",
+        "duration_months": 2
+      }
+    ]
+  },
+  {
+    "employee_id": 103,
+    "name": "Michael Chen",
+    "department": "Engineering",
+    "position": "DevOps Engineer",
+    "salary": 110000,
+    "skills": ["Kubernetes", "Terraform", "AWS", "CI/CD"],
+    "projects": [
+      {
+        "name": "Infrastructure Automation",
+        "status": "In Progress",
+        "duration_months": 8
+      }
+    ]
+  },
+  {
+    "employee_id": 104,
+    "name": "Sarah Williams",
+    "department": "Product",
+    "position": "Product Manager",
+    "salary": 115000,
+    "skills": ["Agile", "User Research", "Roadmapping", "Analytics"],
+    "projects": [
+      {
+        "name": "Mobile App Redesign",
+        "status": "In Progress",
+        "duration_months": 5
+      },
+      {
+        "name": "Feature Prioritization",
+        "status": "Completed",
+        "duration_months": 2
+      }
+    ]
+  },
+  {
+    "employee_id": 105,
+    "name": "David Rodriguez",
+    "department": "Engineering",
+    "position": "Frontend Developer",
+    "salary": 95000,
+    "skills": ["React", "TypeScript", "CSS", "UI/UX"],
+    "projects": [
+      {
+        "name": "Dashboard Redesign",
+        "status": "Completed",
+        "duration_months": 3
+      }
+    ]
+  }
+]
