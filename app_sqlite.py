@@ -7,6 +7,10 @@ from fastapi.templating import Jinja2Templates
 import shutil
 from typing import List, Dict, Any, Optional
 import json
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 from db_manager_sqlite import SQLiteDatabaseManager
 from data_processor import DataProcessor
@@ -93,32 +97,63 @@ async def load_model(model_filename: str = Form(...)):
 
 @app.post("/chat")
 async def chat(query: str = Form(...), top_k: int = Form(5)):
-    """Process a chat query."""
+    """Enhanced chat query processing with improved context retrieval.
+    
+    Args:
+        query: User's chat query
+        top_k: Number of context chunks to retrieve
+    
+    Returns:
+        Dictionary with response and context sources
+    """
+    logger.info(f"Received chat query: {query}")
+    
     if llama_model is None:
+        logger.error("No model loaded")
         return {"status": "error", "message": "No model loaded. Please load a model first."}
     
-    # Search for relevant context
-    context = data_processor.search_similar(query, limit=top_k)
+    try:
+        # Search for relevant context with improved parameters
+        context = data_processor.search_similar(
+            query, 
+            limit=top_k, 
+            similarity_threshold=0.5  # Only retrieve highly relevant chunks
+        )
+        logger.info(f"Retrieved {len(context)} context chunks")
+        
+        # Prepare context for model input
+        context_text = "\n\n".join([
+            f"Source: {chunk['filename']} (Relevance: {chunk['similarity']:.2f})\n{chunk['chunk_text']}" 
+            for chunk in context
+        ])
+        
+        # Construct enhanced prompt with context
+        enhanced_prompt = f"""Context:
+{context_text}
+
+Question: {query}
+
+Based on the provided context, please answer the question. If the context does not contain sufficient information, explain what additional information would be helpful."""
+        
+        # Generate response using the model
+        response = llama_model.generate_response(
+            query=enhanced_prompt, 
+            context=context
+        )
+        
+        logger.info("Response generated successfully")
+        return {
+            "status": "success",
+            "response": response,
+            "sources": context
+        }
     
-    if not context:
-        return {"response": "I don't have any relevant information to answer that question."}
-    
-    # Generate response
-    response = llama_model.generate_response(query, context)
-    
-    # Format sources for display
-    sources = []
-    for item in context:
-        document = item["document"]
-        sources.append({
-            "filename": document["filename"],
-            "similarity": item["similarity_score"]
-        })
-    
-    return {
-        "response": response,
-        "sources": sources
-    }
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
+        return {
+            "status": "error", 
+            "message": f"Error generating response: {str(e)}"
+        }
 
 @app.delete("/document/{document_id}")
 async def delete_document(document_id: str):

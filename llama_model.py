@@ -39,76 +39,43 @@ class LlamaModel:
             n_threads=n_threads
         )
     
-    def generate_response(self, query: str, context: List[Dict[str, Any]]) -> str:
-        """Generate a response for the given query using the provided context.
+    def generate_response(self, query: str, context: List[Dict[str, Any]] = None) -> str:
+        """Generate a response with optional context.
         
         Args:
-            query: User query
-            context: List of context chunks
-            
+            query: User's query or enhanced prompt
+            context: Optional context chunks for more informed responses
+        
         Returns:
-            Generated response
+            Generated response as a string
         """
-        # Format context
-        formatted_context = self._format_context(context)
+        # Prepare context information
+        context_info = ""
+        if context:
+            context_info = "\n\nContext Sources:\n" + "\n".join([
+                f"- {chunk.get('filename', 'Unknown Source')} (Relevance: {chunk.get('similarity', 0):.2f})"
+                for chunk in context
+            ])
         
-        # Create prompt
-        prompt = self._create_prompt(query, formatted_context)
+        # Combine query with context
+        full_prompt = f"{query}{context_info}"
         
-        # Generate response
-        response = self.llama.create_completion(
-            prompt,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            stop=["Human:", "USER:"],
-            echo=False
-        )
-        
-        return response["choices"][0]["text"].strip()
-    
-    def _format_context(self, context: List[Dict[str, Any]]) -> str:
-        """Format context chunks into a string.
-        
-        Args:
-            context: List of context chunks
+        try:
+            # Generate response using LLaMA model
+            response = self.llama.create_chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI assistant trained to provide accurate and contextual responses."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                top_p=self.top_p
+            )
             
-        Returns:
-            Formatted context string
-        """
-        formatted_chunks = []
-        
-        for item in context:
-            chunk = item["chunk"]
-            document = item["document"]
-            score = item["similarity_score"]
+            # Extract and clean the response
+            generated_text = response['choices'][0]['message']['content'].strip()
             
-            formatted_chunk = f"Source: {document['filename']}\n"
-            formatted_chunk += f"Relevance: {score:.4f}\n"
-            formatted_chunk += f"Content: {chunk['text']}\n"
-            
-            formatted_chunks.append(formatted_chunk)
+            return generated_text
         
-        return "\n---\n".join(formatted_chunks)
-    
-    def _create_prompt(self, query: str, context: str) -> str:
-        """Create a prompt for the Llama model.
-        
-        Args:
-            query: User query
-            context: Formatted context
-            
-        Returns:
-            Complete prompt
-        """
-        return f"""You are a helpful AI assistant that answers questions based on the provided context information. 
-If the information needed to answer the question is not present in the context, say "I don't have enough information to answer that question."
-Do not make up or infer information that is not directly supported by the context.
-Always cite your sources when possible.
-
-Context information:
-{context}
-
-Question: {query}
-
-Answer:"""
+        except Exception as e:
+            return f"Error generating response: {str(e)}"

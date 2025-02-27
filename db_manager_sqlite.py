@@ -111,74 +111,83 @@ class SQLiteDatabaseManager:
         return str(cursor.lastrowid)
     
     def search_similar_chunks(self, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
-        """Search for chunks similar to the query embedding.
+        """Enhanced method to search for similar chunks with more context.
         
         Args:
-            query_embedding: Vector embedding of the query
-            limit: Maximum number of results to return
-            
+            query_embedding: Embedding vector of the query
+            limit: Maximum number of chunks to return
+        
         Returns:
-            List of similar chunks with their documents
+            List of similar chunks with additional metadata
         """
-        cursor = self.conn.cursor()
+        import numpy as np
         
-        # Get all chunks
-        cursor.execute("SELECT id, document_id, text, embedding, metadata FROM chunks")
-        all_chunks = cursor.fetchall()
+        # Ensure query embedding is the right shape
+        query_embedding = np.array(query_embedding, dtype=np.float32)
+        if query_embedding.ndim > 1:
+            query_embedding = query_embedding.flatten()
+        if len(query_embedding) > 384:
+            query_embedding = query_embedding[:384]
+        elif len(query_embedding) < 384:
+            query_embedding = np.pad(query_embedding, (0, 384 - len(query_embedding)), mode='constant')
         
-        # Convert query embedding to numpy array
-        query_embedding_np = np.array(query_embedding)
+        # Normalize query embedding
+        query_norm = np.linalg.norm(query_embedding)
+        query_embedding = query_embedding / query_norm if query_norm > 0 else query_embedding
         
-        # Calculate cosine similarity for each chunk
-        results_with_scores = []
-        for chunk_id, doc_id, text, embedding_blob, metadata_json in all_chunks:
-            # Deserialize the embedding
-            chunk_embedding = np.array(pickle.loads(embedding_blob))
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Retrieve all chunks with their embeddings
+        cursor.execute("""
+            SELECT 
+                id, 
+                document_id, 
+                text,
+                embedding,
+                (SELECT filename FROM documents WHERE id = chunks.document_id) as filename
+            FROM chunks
+        """)
+        
+        chunks = []
+        for row in cursor.fetchall():
+            chunk_id, doc_id, text, embedding_blob, filename = row
             
-            # Calculate cosine similarity
-            similarity = np.dot(query_embedding_np, chunk_embedding) / (
-                np.linalg.norm(query_embedding_np) * np.linalg.norm(chunk_embedding)
-            )
-            
-            chunk = {
-                "id": chunk_id,
-                "document_id": doc_id,
-                "text": text,
-                "metadata": json.loads(metadata_json)
-            }
-            
-            results_with_scores.append((chunk, similarity))
-        
-        # Sort by similarity score (descending)
-        results_with_scores.sort(key=lambda x: x[1], reverse=True)
-        
-        # Get top results
-        top_results = results_with_scores[:limit]
-        
-        # Fetch document information for each chunk
-        enriched_results = []
-        for chunk, score in top_results:
-            cursor.execute(
-                "SELECT filename, metadata FROM documents WHERE id = ?", 
-                (chunk["document_id"],)
-            )
-            doc_result = cursor.fetchone()
-            
-            if doc_result:
-                filename, metadata_json = doc_result
-                document = {
-                    "_id": chunk["document_id"],
-                    "filename": filename,
-                    "metadata": json.loads(metadata_json)
-                }
+            # Deserialize embedding
+            try:
+                # Convert blob to numpy array
+                chunk_embedding = np.frombuffer(embedding_blob, dtype=np.float32)
                 
-                enriched_results.append({
-                    "chunk": chunk,
-                    "document": document,
-                    "similarity_score": score
+                # Ensure consistent dimensionality
+                if chunk_embedding.ndim > 1:
+                    chunk_embedding = chunk_embedding.flatten()
+                if len(chunk_embedding) > 384:
+                    chunk_embedding = chunk_embedding[:384]
+                elif len(chunk_embedding) < 384:
+                    chunk_embedding = np.pad(chunk_embedding, (0, 384 - len(chunk_embedding)), mode='constant')
+                
+                # Normalize chunk embedding
+                chunk_norm = np.linalg.norm(chunk_embedding)
+                chunk_embedding = chunk_embedding / chunk_norm if chunk_norm > 0 else chunk_embedding
+                
+                # Compute cosine similarity
+                similarity = np.dot(chunk_embedding, query_embedding)
+                
+                chunks.append({
+                    'chunk_id': chunk_id,
+                    'document_id': doc_id,
+                    'chunk_text': text,
+                    'filename': filename,
+                    'similarity': similarity
                 })
+            except Exception as e:
+                print(f"Error processing chunk {chunk_id}: {e}")
         
-        return enriched_results
+        conn.close()
+        
+        # Sort and limit results
+        chunks.sort(key=lambda x: x['similarity'], reverse=True)
+        return chunks[:limit]
     
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """Get all documents in the database.
@@ -199,29 +208,48 @@ class SQLiteDatabaseManager:
         
         return documents
     
-    def delete_document(self, document_id: str) -> bool:
-        """Delete a document and all its chunks.
+    def get_document_by_filename(self, filename: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a document by its filename.
+        
+        Args:
+            filename: Name of the file to search for
+        
+        Returns:
+            Document information or None if not found
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, filename, metadata FROM documents WHERE filename = ?", (filename,))
+        result = cursor.fetchone()
+        
+        conn.close()
+        
+        if result:
+            return {
+                'id': result[0],
+                'filename': result[1],
+                'metadata': json.loads(result[2]) if result[2] else {}
+            }
+        return None
+    
+    def delete_document(self, document_id: int):
+        """Delete a document and its associated chunks.
         
         Args:
             document_id: ID of the document to delete
-            
-        Returns:
-            True if successful, False otherwise
         """
-        try:
-            cursor = self.conn.cursor()
-            
-            # Delete all chunks associated with the document
-            cursor.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
-            
-            # Delete the document
-            cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
-            
-            self.conn.commit()
-            return True
-        except Exception as e:
-            print(f"Error deleting document: {e}")
-            return False
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Delete associated chunks
+        cursor.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
+        
+        # Delete document
+        cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+        
+        conn.commit()
+        conn.close()
     
     def close(self):
         """Close the database connection."""

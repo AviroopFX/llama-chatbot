@@ -1,5 +1,6 @@
 llama-cpp-python==0.2.11
 sentence-transformers==2.2.2
+numpy==1.21.6
 fastapi==0.104.1
 uvicorn==0.23.2
 python-multipart==0.0.6
@@ -12,3 +13,5 @@ tiktoken==0.5.1
 pandas==2.0.3
 openpyxl==3.1.2
 gunicorn==21.2.0
+# Bolt deployment dependencies
+bolt-new==0.1.0
